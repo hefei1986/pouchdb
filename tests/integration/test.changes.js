@@ -1336,7 +1336,6 @@ adapters.forEach(function (adapter) {
         return db.changes();
       }).then(function (result) {
         normalizeResult(result);
-        delete result.last_seq;
         result.should.deep.equal({
           "results": [
             {
@@ -1358,77 +1357,71 @@ adapters.forEach(function (adapter) {
               "changes": [{ "rev": "3-f"}
               ]
             }
-          ]
-          //, "last_seq": seqs[5]
+          ],
+          "last_seq": seqs[5]
         });
         return db.changes({limit: 0});
       }).then(function (result) {
         normalizeResult(result);
-        delete result.last_seq;
         result.should.deep.equal({
           "results": [{
             "seq": seqs[2],
             "id": "gamma",
             "changes": [{"rev": "1-b"}]
-          }]
-          //, "last_seq": seqs[2]
+          }],
+          "last_seq": seqs[2]
         }, '1:' + JSON.stringify(result));
         return db.changes({limit: 1});
       }).then(function (result) {
         normalizeResult(result);
-        delete result.last_seq;
         result.should.deep.equal({
           "results": [{
             "seq": seqs[2],
             "id": "gamma",
             "changes": [{"rev": "1-b"}]
-          }]
-          //, "last_seq": seqs[2]
+          }],
+          "last_seq": seqs[2]
         }, '2:' + JSON.stringify(result));
         return db.changes({limit: 2});
       }).then(function (result) {
         normalizeResult(result);
-        delete result.last_seq;
         result.should.deep.equal({
           "results": [{
             "seq": seqs[2],
             "id": "gamma",
             "changes": [{"rev": "1-b"}]
-          }, {"seq": seqs[3], "id": "alpha", "changes": [{"rev": "2-d"}]}]
-          //, last_seq": seqs[3]
+          }, {"seq": seqs[3], "id": "alpha", "changes": [{"rev": "2-d"}]}],
+          "last_seq": seqs[3]
         }, '3:' + JSON.stringify(result));
         return db.changes({limit: 1, descending: true});
       }).then(function (result) {
         normalizeResult(result);
-        delete result.last_seq;
         result.should.deep.equal({
           "results": [{
             "seq": seqs[5],
             "id": "beta",
             "changes": [{"rev": "3-f"}],
             "deleted": true
-          }]
-          //, "last_seq": seqs[5]
+          }],
+          "last_seq": seqs[5]
         }, '4:' + JSON.stringify(result));
         return db.changes({limit: 2, descending: true});
       }).then(function (result) {
         normalizeResult(result);
-        delete result.last_seq;
         var expected = {
           "results": [{
             "seq": seqs[5],
             "id": "beta",
             "changes": [{"rev": "3-f"}],
             "deleted": true
-          }, {"seq": seqs[3], "id": "alpha", "changes": [{"rev": "2-d"}]}]
-          //, "last_seq": seqs[3]
+          }, {"seq": seqs[3], "id": "alpha", "changes": [{"rev": "2-d"}]}],
+          "last_seq": seqs[3]
         };
         result.should.deep.equal(expected, '5:' + JSON.stringify(result) +
         ', shoulda got: ' + JSON.stringify(expected));
         return db.changes({descending: true});
       }).then(function (result) {
         normalizeResult(result);
-        delete result.last_seq;
         var expected = {
           "results": [{
             "seq": seqs[5],
@@ -1439,8 +1432,8 @@ adapters.forEach(function (adapter) {
             "seq": seqs[2],
             "id": "gamma",
             "changes": [{"rev": "1-b"}]
-          }]
-          //, "last_seq": seqs[2]
+          }],
+          "last_seq": seqs[2]
         };
         result.should.deep.equal(expected, '6:' + JSON.stringify(result) +
         ', shoulda got: ' + JSON.stringify(expected));
@@ -1909,13 +1902,49 @@ adapters.forEach(function (adapter) {
       var db = new PouchDB(dbs.name);
       db.bulkDocs({ docs: docs1 }, function (err, info) {
         db.changes({
-          filter: function (doc) {
-            return doc.integer % 2 === 0;
-          },
-          complete: function (err, changes) {
-            // Should get docs 0 and 2 if the filter has been applied correctly.
-            changes.results.length.should.equal(2);
-            done();
+          complete: function (err, allChanges) {
+            db.changes({
+              filter: function (doc) {
+                return doc.integer % 2 === 0;
+              },
+              complete: function (err, filteredChanges) {
+                // Should get docs 0 and 2 if the filter
+                // has been applied correctly.
+                filteredChanges.results.length.should.equal(2);
+                filteredChanges.last_seq.should.equal(allChanges.last_seq);
+                done();
+              }
+            });
+          }
+        });
+      });
+    });
+
+    it('Non-live changes filter, descending', function (done) {
+      var docs1 = [
+        {_id: '0', integer: 0},
+        {_id: '1', integer: 1},
+        {_id: '2', integer: 2},
+        {_id: '3', integer: 3},
+      ];
+      var db = new PouchDB(dbs.name);
+      db.bulkDocs({ docs: docs1 }, function (err, info) {
+        db.changes({
+          descending: true,
+          complete: function (err, allChanges) {
+            db.changes({
+              descending: true,
+              filter: function (doc) {
+                return doc.integer > 2;
+              },
+              complete: function (err, filteredChanges) {
+                // Should get docs 2 and 3 if the filter
+                // has been applied correctly.
+                filteredChanges.results.length.should.equal(1);
+                filteredChanges.last_seq.should.equal(allChanges.last_seq);
+                done();
+              }
+            });
           }
         });
       });
